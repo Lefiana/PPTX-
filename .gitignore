@@ -1,2 +1,5 @@
 *.pptx
 ./venv/*
+*.xlsx
+*.png
+
