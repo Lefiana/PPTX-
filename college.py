@@ -2,12 +2,16 @@ import os
 import copy
 import io
 import re
+import cv2
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from pptx import Presentation
 from pptx.util import Cm
 from PIL import Image, ImageOps
 import unicodedata
+
+
 
 # ==========================================
 # --- CONFIGURATION & PATHS ---
@@ -115,16 +119,90 @@ def get_validated_students(excel_path, master_dir):
             
     return sorted(validated_list, key=lambda x: x["excel_index"])
 
+def find_best_face(gray_img, face_cascade, img_h):
+    """Attempts multiple detection passes from strict to loose, filtering out obvious false positives."""
+    # List of strategies: (scaleFactor, minNeighbors, minSize)
+    strategies = [
+        (1.1, 6, (100, 100)), # Pass 1: Very Strict (Catches perfect, close faces)
+        (1.05, 4, (80, 80)),  # Pass 2: Medium (Catches slightly further faces)
+        (1.05, 3, (50, 50))   # Pass 3: Loose (Catches far faces, but risky)
+    ]
+    
+    for scale, neighbors, min_s in strategies:
+        faces = face_cascade.detectMultiScale(gray_img, scaleFactor=scale, minNeighbors=neighbors, minSize=min_s)
+        
+        valid_faces = []
+        for (x, y, w, h) in faces:
+            # SANITY CHECK: Reject any "face" that is in the bottom 30% of the photo
+            # This prevents the AI from mistaking a hand, belt, or diploma for a face.
+            if y < (img_h * 0.70):
+                valid_faces.append((x, y, w, h))
+        
+        if valid_faces:
+            # Return the largest valid face found during this pass
+            return max(valid_faces, key=lambda f: f[2] * f[3])
+            
+    return None # No face found across all passes
+
 # ==========================================
 # --- PPTX MANIPULATION ---
 # ==========================================
 def get_sanitized_image(image_path):
-    """Loads image, corrects rotation via EXIF, and converts to stream."""
+    """Loads image, auto-crops to shoulder/chest height using OpenCV multi-pass, and converts to stream."""
     with Image.open(image_path) as img:
-        img = ImageOps.exif_transpose(img) 
+        img = ImageOps.exif_transpose(img)
+        img_w, img_h = img.size
+        
         rgb_img = img.convert('RGB')
+        open_cv_image = np.array(rgb_img)
+        gray_img = cv2.cvtColor(open_cv_image, cv2.COLOR_RGB2GRAY)
+        
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        
+        # USE THE NEW MULTI-PASS FUNCTION HERE
+        best_face = find_best_face(gray_img, face_cascade, img_h)
+        
+        target_ratio = 17.27 / 23.43
+        
+        if best_face is not None:
+            # Unpack the coordinates of the validated face
+            fx, fy, fw, fh = best_face
+            
+            # --- DYNAMIC PADDING MATH ---
+            top_padding = int(fh * 0.7)     
+            bottom_padding = int(fh * 1.8)  # Kept at 1.8 to hide the hands
+            
+            crop_top = max(0, fy - top_padding)
+            crop_bottom = min(img_h, fy + fh + bottom_padding)
+            crop_height = crop_bottom - crop_top
+            
+            crop_width = int(crop_height * target_ratio)
+            face_center_x = fx + (fw // 2)
+            crop_left = face_center_x - (crop_width // 2)
+            crop_right = crop_left + crop_width
+            
+            if crop_left < 0:
+                crop_right -= crop_left
+                crop_left = 0
+            if crop_right > img_w:
+                crop_left -= (crop_right - img_w)
+                crop_right = img_w
+                
+            final_img = rgb_img.crop((crop_left, crop_top, crop_right, crop_bottom))
+        else:
+            # Fallback (Center Crop)
+            print(f"  [!] Face detection completely failed for {image_path}. Using center crop.")
+            if img_w / img_h > target_ratio:
+                new_w = int(img_h * target_ratio)
+                left = (img_w - new_w) // 2
+                final_img = rgb_img.crop((left, 0, left + new_w, img_h))
+            else:
+                new_h = int(img_w / target_ratio)
+                top = (img_h - new_h) // 2
+                final_img = rgb_img.crop((0, top, img_w, top + new_h))
+
         img_stream = io.BytesIO()
-        rgb_img.save(img_stream, format="JPEG")
+        final_img.save(img_stream, format="JPEG", quality=95)
         img_stream.seek(0)
         return img_stream
 
