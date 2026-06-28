@@ -1,0 +1,37 @@
+{
+    "presets": {
+        "COLLEGE": {
+            "BMMA": "Bachelor of Multimedia Arts",
+            "BSAIS": "Bachelor of Science in Accounting Information Systems",
+            "BSIT": "Bachelor of Science in Information Technology",
+            "BSCPE": "Bachelor of Science in Computer Engineering",
+            "BSHM": "Bachelor of Science in Hospitality Management",
+            "BSTM": "Bachelor of Science in Tourism Management",
+            "ACT": "Associate in Computer Technology",
+            "BACOMM": "Bachelor of Arts in Communication"
+        },
+        "SHS": {
+            "STEM": "Science Technology Engineering and Mathematics",
+            "ABM": "Accountancy Business and Management",
+            "HUMSS": "Humanities and Social Sciences",
+            "CAR": "Culinary Arts",
+            "CA": "Culinary Arts",
+            "DA": "Digital Arts",
+            "ITMAWD": "IT in Mobile App & Web Dev't"
+        }
+    },
+    "current_layout": {
+        "img_width_cm": 17.27,
+        "img_height_cm": 23.43,
+        "img_left_cm": 29.79,
+        "img_top_cm": 2.58
+    },
+    "excel_headers": [
+        "Unnamed: 0",
+        "STUDENT NAME",
+        "PROGRAM",
+        "Unnamed: 3",
+        "Unnamed: 4",
+        "Unnamed: 5"
+    ]
+}
